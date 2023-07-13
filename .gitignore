@@ -3,5 +3,6 @@
 
 .packages
 .pub/
+base.apk.cache/
 
 build/

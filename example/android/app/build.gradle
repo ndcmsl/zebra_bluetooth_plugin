@@ -26,7 +26,7 @@ apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    compileSdkVersion 29
+    compileSdkVersion 31
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -60,4 +60,6 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation files('C:\\Users\\SKLUM\\Documents\\repos\\flutter_zebra_sdk_clone\\android\\libs\\ZSDK_ANDROID_API.jar')
+    implementation files('C:\\Users\\SKLUM\\Documents\\repos\\flutter_zebra_sdk_clone\\android\\libs\\ZSDK_ANDROID_BTLE.jar')
 }

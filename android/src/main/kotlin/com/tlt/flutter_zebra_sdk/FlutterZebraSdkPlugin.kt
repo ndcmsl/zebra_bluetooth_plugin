@@ -1,6 +1,9 @@
 package com.tlt.flutter_zebra_sdk
 
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -8,10 +11,17 @@ import android.util.Log
 import androidx.annotation.NonNull
 import com.google.gson.Gson
 import com.zebra.sdk.btleComm.BluetoothLeConnection
+import com.zebra.sdk.comm.BluetoothConnectionInsecure
 import com.zebra.sdk.comm.Connection
 import com.zebra.sdk.comm.ConnectionException
 import com.zebra.sdk.comm.TcpConnection
-import com.zebra.sdk.printer.discovery.*
+import com.zebra.sdk.printer.discovery.DiscoveredPrinter
+import com.zebra.sdk.printer.discovery.DiscoveredPrinterNetwork
+import com.zebra.sdk.printer.discovery.DiscoveryException
+import com.zebra.sdk.printer.discovery.DiscoveryHandler
+import com.zebra.sdk.printer.discovery.DiscoveryUtil
+import com.zebra.sdk.printer.discovery.NetworkDiscoverer
+import com.zebra.sdk.printer.discovery.UsbDiscoverer
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -19,6 +29,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.io.IOException
+import java.util.UUID
 
 
 // import kotlinx.serialization.*
@@ -121,6 +133,10 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         "isPrinterConnected" -> {
           isPrinterConnected(call, result)
         }
+
+        "printZPLOverBluetoothInsecure" -> {
+          onPrintZplDataOverBluetoothInsecure(call, result)
+        }
         else -> result.notImplemented()
       }
     }
@@ -184,12 +200,54 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
+    val charset = Charsets.ISO_8859_1
     var data: String? = call.argument("data")
+    var conn: BluetoothLeConnection? = null
+    var tmp: BluetoothSocket? = null
+    var bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+    val MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    var mmSocket: BluetoothSocket? = null
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
     if (data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
+    try {
+      if (bluetoothAdapter.isEnabled) {
+        // Conexion comun a cualquier dispositivo bluetooth
+        var bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice("00:07:4D:DE:75:72")
+        bluetoothAdapter.cancelDiscovery()
+        Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
+        // Creacion del objeto discoveredPrinter sin un método discoverer, copiado del sdk .jar
+        var printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(bluetoothDevice.address, bluetoothDevice.name ?: "zebraPrinter", context)
+        // Conexion comun a cualquier dispositivo bluetooth
+        var connection: BluetoothLeConnection? = BluetoothLeConnection(printer?.address, context)
+        connection?.open()
+        connection?.write("^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ".toByteArray())
+        connection?.close()
+      }
+    } catch (e: DiscoveryException) {
+      e.printStackTrace()
+    }
+    /*
+    try {
+      val thePrinterConnection: Connection = ConnectionBuilder.build("BT:$macAddress")
 
+      thePrinterConnection.open()
+
+      val zplData: String = "^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ"
+
+      thePrinterConnection.write(zplData.toByteArray())
+
+      thePrinterConnection.close()
+
+    } catch (e: ConnectionException) {
+      e.printStackTrace()
+    }
+
+
+     */
+
+    /*
     var conn: BluetoothLeConnection? = null
     try {
       conn = BluetoothLeConnection(macAddress, context)
@@ -202,7 +260,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
       // Send the data to printer as a byte array.
 
       // Send the data to printer as a byte array.
-      conn.write(data?.toByteArray())
+      conn.write(data?.toByteArray(charset))
 
       Thread.sleep(500)
     } catch (e: Exception) {
@@ -219,6 +277,58 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
       }
     }
 
+     */
+
+  }
+
+  private fun reflectivelyInstatiateDiscoveredPrinterBluetoothLe(var0: String, var1: String, var2: Context): DiscoveredPrinter? {
+    try {
+      val var3 = Class.forName("com.zebra.sdk.btleComm.DiscoveredPrinterBluetoothLe")
+      val var4 = var3.getDeclaredConstructor(String::class.java, String::class.java, Context::class.java)
+      var4.isAccessible = true
+      return var4.newInstance(var0, var1, context) as DiscoveredPrinter
+    } catch (var5: Exception) {
+      return null;
+    }
+  }
+
+  private fun onPrintZplDataOverBluetoothInsecure(@NonNull call: MethodCall, @NonNull result: Result) {
+    var macAddress: String? = call.argument("mac")
+    var data: String? = call.argument("data")
+    Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
+    if (data == null) {
+      result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
+    }
+    Thread {
+        try {
+
+            // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
+            val thePrinterConn: Connection = BluetoothConnectionInsecure(macAddress)
+
+            // Initialize
+            Looper.prepare()
+
+            // Open the connection - physical connection is established here.
+            thePrinterConn.open()
+
+            // This example prints "This is a ZPL test." near the top of the label.
+            val zplData = "^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ"
+
+            // Send the data to printer as a byte array.
+            thePrinterConn.write(zplData.toByteArray())
+
+            // Make sure the data got to the printer before closing the connection
+            Thread.sleep(500)
+
+            // Close the insecure connection to release resources.
+            thePrinterConn.close()
+
+            Looper.myLooper()?.quit()
+        } catch (e: Exception) {
+            // Handle communications error here.
+            e.printStackTrace()
+        }
+    }.start()
   }
 
   private fun onGetPrinterInfo(@NonNull call: MethodCall, @NonNull result: Result) {

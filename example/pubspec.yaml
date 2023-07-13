@@ -6,9 +6,11 @@ description: Demonstrates how to use the flutter_zebra_sdk plugin.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 environment:
-  sdk: ">=2.7.0 <3.0.0"
+  sdk: ">=3.0.0"
 
 dependencies:
+  psdk_fruit_cpcl: ^0.0.17
+  flutter_esc_pos_utils: 1.0.0
   flutter:
     sdk: flutter
   flutter_zebra_sdk:
@@ -22,7 +24,6 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.0
-  logger: ^0.9.4
 
 dev_dependencies:
   flutter_test:
@@ -33,6 +34,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter.
 flutter:
+  assets:
+    - assets/
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -68,3 +71,5 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+dependency_overrides:
+  image: ^4.0.16
