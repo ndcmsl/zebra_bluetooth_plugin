@@ -223,12 +223,8 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
     var data: String? = call.argument("data")
-    var textToPrint = "! 0 200 200 210 1\r\n" +
-            "TEXT 4 0 30 40 This is a CPCL test.\r\n" +
-            "FORM\r\n" +
-            "PRINT\r\n"
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
-    if (data == null) {
+    if (data == null || macAddress == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
     Thread {
@@ -237,7 +233,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
       bluetoothAdapter.cancelDiscovery()
       try {
         val bluetoothDevice: BluetoothDevice =
-          bluetoothAdapter.getRemoteDevice("70:B9:50:8C:C3:07")
+          bluetoothAdapter.getRemoteDevice(macAddress)
         if (bluetoothAdapter.isEnabled) {
           Log.d(logTag, "${bluetoothDevice.bondState}")
           // Conexion comun a cualquier dispositivo bluetooth
@@ -252,7 +248,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           conn = BluetoothLeConnection(printer?.address,context)
           conn.open()
           if (conn.isConnected) {
-            conn.write(textToPrint.toByteArray())
+            conn.write(data!!.toByteArray())
             Thread.sleep(500)
           }
         }
