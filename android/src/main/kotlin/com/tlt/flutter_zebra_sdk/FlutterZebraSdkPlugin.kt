@@ -3,8 +3,12 @@ package com.tlt.flutter_zebra_sdk
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -198,88 +202,75 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
   }
 
+  class BluetoothBroadcastReceiver: BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      Log.d("BluetoothReceiver", "${intent?.action}")
+
+      when (intent?.action) {
+        BluetoothDevice.ACTION_ACL_CONNECTED -> {
+          val device: BluetoothDevice = intent?.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+          Log.d("BluetoothReceiver", "BluetoothDevice ${device.name} connected")
+        }
+        BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+          val device: BluetoothDevice = intent?.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+          Log.d("BluetoothReceiver", "BluetoothDevice ${device.name} disconnected")
+        }
+
+      }
+    }
+  }
+
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
-    val charset = Charsets.ISO_8859_1
     var data: String? = call.argument("data")
-    var conn: BluetoothLeConnection? = null
-    var tmp: BluetoothSocket? = null
-    var bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-    val MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-    var mmSocket: BluetoothSocket? = null
+    var textToPrint = "! 0 200 200 210 1\r\n" +
+            "TEXT 4 0 30 40 This is a CPCL test.\r\n" +
+            "FORM\r\n" +
+            "PRINT\r\n"
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
     if (data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
-    try {
-      if (bluetoothAdapter.isEnabled) {
-        // Conexion comun a cualquier dispositivo bluetooth
-        var bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice("00:07:4D:DE:75:72")
-        bluetoothAdapter.cancelDiscovery()
-        Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
-        // Creacion del objeto discoveredPrinter sin un método discoverer, copiado del sdk .jar
-        var printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(bluetoothDevice.address, bluetoothDevice.name ?: "zebraPrinter", context)
-        // Conexion comun a cualquier dispositivo bluetooth
-        var connection: BluetoothLeConnection? = BluetoothLeConnection(printer?.address, context)
-        connection?.open()
-        connection?.write("^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ".toByteArray())
-        connection?.close()
-      }
-    } catch (e: DiscoveryException) {
-      e.printStackTrace()
-    }
-    /*
-    try {
-      val thePrinterConnection: Connection = ConnectionBuilder.build("BT:$macAddress")
-
-      thePrinterConnection.open()
-
-      val zplData: String = "^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ"
-
-      thePrinterConnection.write(zplData.toByteArray())
-
-      thePrinterConnection.close()
-
-    } catch (e: ConnectionException) {
-      e.printStackTrace()
-    }
-
-
-     */
-
-    /*
-    var conn: BluetoothLeConnection? = null
-    try {
-      conn = BluetoothLeConnection(macAddress, context)
-
-      // Open the connection - physical connection is established here.
-
-      // Open the connection - physical connection is established here.
-      conn.open()
-
-      // Send the data to printer as a byte array.
-
-      // Send the data to printer as a byte array.
-      conn.write(data?.toByteArray(charset))
-
-      Thread.sleep(500)
-    } catch (e: Exception) {
-      // Handle communications error here.
-      e.printStackTrace()
-      result.error("Error", "onPrintZplDataOverBluetooth", e)
-    } finally {
-      if (null != conn) {
+    Thread {
+      var conn: BluetoothLeConnection? = null
+      val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+      bluetoothAdapter.cancelDiscovery()
+      try {
+        val bluetoothDevice: BluetoothDevice =
+          bluetoothAdapter.getRemoteDevice("70:B9:50:8C:C3:07")
+        if (bluetoothAdapter.isEnabled) {
+          Log.d(logTag, "${bluetoothDevice.bondState}")
+          // Conexion comun a cualquier dispositivo bluetooth
+          Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
+          // Creacion del objeto discoveredPrinter sin un método discoverer, copiado del sdk .jar
+          val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
+            bluetoothDevice.address,
+            bluetoothDevice.name ?: "zebraPrinter",
+            context
+          )
+          // Conexion comun a cualquier dispositivo bluetooth
+          conn = BluetoothLeConnection(printer?.address,context)
+          conn.open()
+          if (conn.isConnected) {
+            conn.write(textToPrint.toByteArray())
+            Thread.sleep(500)
+          }
+        }
+      } catch (e: ConnectionException) {
+        e.printStackTrace()
+        Handler(Looper.getMainLooper()).post {
+            result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
+        }
+      } finally {
         try {
-          conn.close()
+          conn?.close()
         } catch (e: ConnectionException) {
           e.printStackTrace()
         }
       }
-    }
-
-     */
-
+    }.start()
   }
+
 
   private fun reflectivelyInstatiateDiscoveredPrinterBluetoothLe(var0: String, var1: String, var2: Context): DiscoveredPrinter? {
     try {

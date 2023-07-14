@@ -169,7 +169,7 @@ class _MyAppState extends State<MyApp> {
                 TextButton(onPressed: onDiscovery, child: Text('Discovery')),
                 TextButton(onPressed: () => onDiscoveryUSB(context), child: Text('Discovery USB')),
                 TextButton(onPressed: onTestTCP, child: Text('Print TCP')),
-                TextButton(onPressed: onTestBluetooth, child: Text('Print Bluetooth')),
+                TextButton(onPressed: () async => await onTestBluetooth(), child: Text('Print Bluetooth')),
                 TextButton(onPressed: onTestBluetoothInsecure, child: Text('Print Bluetooth Insecure')),
               ],
             ),
