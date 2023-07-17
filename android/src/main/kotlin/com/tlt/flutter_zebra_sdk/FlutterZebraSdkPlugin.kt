@@ -203,7 +203,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
-    var data: String? = call.argument("data")
+    var data: ByteArray? = call.argument("data")
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
     if (data == null || macAddress == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
@@ -229,7 +229,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           conn = BluetoothLeConnection(printer?.address,context)
           conn.open()
           if (conn.isConnected) {
-            conn.write(data!!.toByteArray())
+            conn.write(data!!)
             Thread.sleep(500)
           }
         }
