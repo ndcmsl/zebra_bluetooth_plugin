@@ -22,10 +22,10 @@ class ZebraSdk {
       if (data != null) {
         params['data'] = data;
       }
-      return await _channel.invokeMethod('printZPLOverBluetooth', params);
-    } catch (e) {
-      print(e);
-      //throw ArgumentError('Error, cant connect: $e');
+      await _channel.invokeMethod('printZPLOverBluetooth', params);
+      return true;
+    } on PlatformException catch (e) {
+      return false;
     }
   }
 

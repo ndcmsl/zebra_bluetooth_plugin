@@ -112,13 +112,36 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> onTestBluetooth() async {
-    Uint8List data = Uint8List(3);
+    String data;
+    data = '''
+    ''
+    ^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR6,6~SD15^JUS^LRN^CI0^XZ
+    ^XA
+    ^MMT
+    ^PW500
+    ^LL0240
+    ^LS0
+    ^FT144,33^A0N,25,24^FB111,1,0,C^FH\^FDITEM TITLE^FS
+    ^FT3,61^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDOption 1, Option 2, Option 3, Option 4, Opt^FS^CI0
+    ^FT3,84^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDion 5, Option 6 ^FS^CI0
+    ^FT34,138^A@N,25,24,TT0003M_^FB331,1,0,C^FH\^CI17^F8^FDOrder: https://eat.chat/phobac^FS^CI0
+    ^FT29,173^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FDPromotional Promotional Promotional^FS^CI0
+    ^FT29,193^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FD Promotional Promotional ^FS^CI0
+    ^FT106,233^A0N,25,24^FB188,1,0,C^FH\^FDPHO BAC HOA VIET^FS
+    ^PQ1,0,1,Y^XZ
+        ''';
     String arr = '00:07:4D:DE:75:72';
     if (Platform.isIOS) {
       arr = '50J171201608';
     }
-    final rep = ZebraSdk.printZPLOverBluetooth(arr, data: data);
-    print(rep);
+    List<int> list = data.codeUnits;
+    Uint8List bytes = Uint8List.fromList(list);
+    try {
+      final rep = await ZebraSdk.printZPLOverBluetooth(arr, data: bytes);
+      print('el booleano es: $rep');
+    } catch (e) {
+      print('llego al ultimo catch del codigo');
+    }
   }
 
   Future<void> onTestBluetoothInsecure() async {

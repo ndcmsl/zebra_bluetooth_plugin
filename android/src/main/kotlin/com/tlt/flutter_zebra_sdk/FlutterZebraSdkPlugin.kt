@@ -235,15 +235,14 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
       } catch (e: ConnectionException) {
         e.printStackTrace()
+        Handler(Looper.getMainLooper()).post {
+          result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
+        }
       } finally {
         try {
           conn?.close()
-          result.success(true)
         } catch (e: ConnectionException) {
           e.printStackTrace()
-          Handler(Looper.getMainLooper()).post {
-            result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
-          }
         }
       }
     }.start()
