@@ -23,8 +23,8 @@ class ZebraSdk {
         params['data'] = data;
       }
       return await _channel.invokeMethod('printZPLOverBluetooth', params);
-    } on PlatformException catch (e) {
-      throw ArgumentError('Error, cant connect: ${e.message}');
+    } catch (e) {
+      throw ArgumentError('Error, cant connect: $e');
     }
   }
 
