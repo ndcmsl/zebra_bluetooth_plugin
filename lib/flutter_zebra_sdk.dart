@@ -17,11 +17,15 @@ class ZebraSdk {
   }
 
   static Future<bool?> printZPLOverBluetooth(String macAddress, {Uint8List? data}) async {
+    try {
       final Map<String, dynamic> params = {"mac": macAddress};
       if (data != null) {
         params['data'] = data;
       }
       return await _channel.invokeMethod('printZPLOverBluetooth', params);
+    } on PlatformException catch (e) {
+      throw ArgumentError('Error, cant connect: ${e.message}');
+    }
   }
 
   static Future<String?> printZPLOverBluetoothInsecure(String macAddress, {String? data}) async {
