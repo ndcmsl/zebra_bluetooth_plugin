@@ -24,7 +24,7 @@ static Future<String?> printZPLOverBluetooth(String macAddress, {Uint8List? data
       }
       await _channel.invokeMethod('printZPLOverBluetooth', params);
     } catch (e) {
-      print(e);
+      throw(e);
     }
   }
 
