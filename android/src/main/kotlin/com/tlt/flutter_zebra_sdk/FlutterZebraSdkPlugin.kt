@@ -231,6 +231,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           if (conn.isConnected) {
             conn.write(data!!)
             Thread.sleep(500)
+            result.success("Printed succesfull");
           }
         }
       } catch (e: ConnectionException) {
