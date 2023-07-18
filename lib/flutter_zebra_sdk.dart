@@ -16,16 +16,12 @@ class ZebraSdk {
     return await _channel.invokeMethod('printZPLOverTCPIP', params);
   }
 
-static Future<String?> printZPLOverBluetooth(String macAddress, {Uint8List? data}) async {
-    try {
+  static Future<bool?> printZPLOverBluetooth(String macAddress, {Uint8List? data}) async {
       final Map<String, dynamic> params = {"mac": macAddress};
       if (data != null) {
         params['data'] = data;
       }
-      await _channel.invokeMethod('printZPLOverBluetooth', params);
-    } catch (e) {
-      throw(e);
-    }
+      return await _channel.invokeMethod('printZPLOverBluetooth', params);
   }
 
   static Future<String?> printZPLOverBluetoothInsecure(String macAddress, {String? data}) async {
