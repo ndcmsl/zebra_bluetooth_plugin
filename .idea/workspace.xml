@@ -9,6 +9,7 @@
       <change beforePath="$PROJECT_DIR$/example/android/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/example/android/.idea/gradle.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/example/android/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/example/android/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/example/android/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/example/android/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/example/lib/main.dart" beforeDir="false" afterPath="$PROJECT_DIR$/example/lib/main.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/flutter_zebra_sdk.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/flutter_zebra_sdk.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

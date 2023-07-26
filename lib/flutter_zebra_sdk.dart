@@ -16,7 +16,7 @@ class ZebraSdk {
     return await _channel.invokeMethod('printZPLOverTCPIP', params);
   }
 
-  static Future<bool?> printZPLOverBluetooth(String macAddress, {Uint8List? data, int? copies}) async {
+  static Future<bool?> printZPLOverBluetooth(String macAddress, {List<int>? data, int? copies}) async {
     try {
       final Map<String, dynamic> params = {"mac": macAddress};
       if (data != null) {
