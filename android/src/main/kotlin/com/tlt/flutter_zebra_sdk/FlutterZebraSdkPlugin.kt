@@ -233,7 +233,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           if (conn.isConnected) {
             for (number in 1..num) {
               conn.write(data!!)
-              Thread.sleep(1000)
+              Thread.sleep(1500)
             }
             result.success("Printed succesfull");
           }
