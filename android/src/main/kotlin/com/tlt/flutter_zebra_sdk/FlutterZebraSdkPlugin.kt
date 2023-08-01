@@ -215,34 +215,34 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
       val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
       bluetoothAdapter.cancelDiscovery()
       try {
-        val bluetoothDevice: BluetoothDevice =
-          bluetoothAdapter.getRemoteDevice(macAddress)
+        val bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice(macAddress)
         if (bluetoothAdapter.isEnabled) {
           Log.d(logTag, "${bluetoothDevice.bondState}")
-          // Conexion comun a cualquier dispositivo bluetooth
           Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
-          // Creacion del objeto discoveredPrinter sin un método discoverer, copiado del sdk .jar
           val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
             bluetoothDevice.address,
             bluetoothDevice.name ?: "zebraPrinter",
             context
           )
-          // Conexion comun a cualquier dispositivo bluetooth
-          conn = BluetoothLeConnection(printer?.address,context)
+          conn = BluetoothLeConnection(printer?.address, context)
           conn.open()
           if (conn.isConnected) {
             for (number in 1..num) {
               conn.write(data!!)
-              Thread.sleep(1500)
+              Log.d(logTag, "Label sent to printer")
+              Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
+              Log.d(logTag, "Delay completed")
             }
-            result.success("Printed succesfull");
+            result.success("Printed successfully")
+          } else {
+            result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
           }
+        } else {
+          result.error("BLUETOOTH_DISABLED", "Bluetooth is not enabled on the device", null)
         }
       } catch (e: ConnectionException) {
         e.printStackTrace()
-        Handler(Looper.getMainLooper()).post {
-          result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
-        }
+        result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
       } finally {
         try {
           conn?.close()
