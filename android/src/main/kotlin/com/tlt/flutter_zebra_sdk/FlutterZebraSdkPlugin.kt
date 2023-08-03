@@ -249,24 +249,22 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     if (data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
-    Thread {
-      try {
-        if (bluetoothConnection!!.isConnected) {
-          for (number in 1..num) {
-            bluetoothConnection!!.write(data!!)
-            Log.d(logTag, "Label sent to printer")
-            Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
-            Log.d(logTag, "Delay completed")
-          }
-          result.success("Printed successfully")
-        } else {
-          result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
+    try {
+      if (bluetoothConnection!!.isConnected) {
+        for (number in 1..num) {
+          bluetoothConnection!!.write(data!!)
+          Log.d(logTag, "Label sent to printer")
+          Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
+          Log.d(logTag, "Delay completed")
         }
-      } catch (e: ConnectionException) {
-        e.printStackTrace()
-        result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
+        result.success("Printed successfully")
+      } else {
+        result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
       }
-    }.start()
+    } catch (e: ConnectionException) {
+      e.printStackTrace()
+      result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
+    }
   }
 
 
