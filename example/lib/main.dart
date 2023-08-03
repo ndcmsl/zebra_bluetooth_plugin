@@ -147,7 +147,7 @@ class _MyAppState extends State<MyApp> {
       arr = '50J171201608';
     }
     try {
-      final rep = await ZebraSdk.printZPLOverBluetooth(arr, data: utf8.encode(data));
+      final rep = await ZebraSdk.printZPLOverBluetooth(data: utf8.encode(data));
       print('el booleano es: $rep');
     } catch (e) {
       print('llego al ultimo catch del codigo');
@@ -178,7 +178,7 @@ class _MyAppState extends State<MyApp> {
     if (Platform.isIOS) {
       arr = '50J171201608';
     }
-    final rep = ZebraSdk.printZPLOverBluetoothInsecure(arr, data: data);
+    final rep = ZebraSdk.printZPLOverBluetoothInsecure(data: data);
     print(rep);
   }
 

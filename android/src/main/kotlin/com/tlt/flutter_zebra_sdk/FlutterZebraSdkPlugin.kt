@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.annotation.NonNull
 import com.google.gson.Gson
 import com.zebra.sdk.btleComm.BluetoothLeConnection
+import com.zebra.sdk.comm.BluetoothConnection
 import com.zebra.sdk.comm.BluetoothConnectionInsecure
 import com.zebra.sdk.comm.Connection
 import com.zebra.sdk.comm.ConnectionException
@@ -79,6 +80,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
   private lateinit var context: Context
   private lateinit var activity: Activity
   var printers: MutableList<ZebraPrinterInfo> = ArrayList()
+  private var bluetoothConnection: BluetoothLeConnection? = null
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     activity = binding.activity;
@@ -140,6 +142,14 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         "printZPLOverBluetoothInsecure" -> {
           onPrintZplDataOverBluetoothInsecure(call, result)
         }
+
+        "establishBluetoothConnection" -> {
+          establishBluetoothConnection(call, result)
+        }
+
+        "destroyBluetoothConnection" -> {
+          destroyBluetoothConnection()
+        }
         else -> result.notImplemented()
       }
     }
@@ -165,6 +175,37 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private fun createTcpConnect(ip: String, port: Int): TcpConnection {
     return TcpConnection(ip, port)
+  }
+
+  private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull result: Result) {
+    var macAddress: String? = call.argument("mac")
+    try {
+      val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+      bluetoothAdapter.cancelDiscovery()
+      val bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice(macAddress)
+      if (bluetoothAdapter.isEnabled) {
+        Log.d(logTag, "${bluetoothDevice.bondState}")
+        Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
+        val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
+          bluetoothDevice.address,
+          bluetoothDevice.name ?: "zebraPrinter",
+          context
+        )
+        bluetoothConnection = BluetoothLeConnection(printer?.address, context)
+        bluetoothConnection!!.open()
+      }
+    } catch (e: ConnectionException) {
+      e.printStackTrace()
+      result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
+    }
+  }
+
+  private fun destroyBluetoothConnection() {
+    try {
+      bluetoothConnection?.close()
+    } catch (e: ConnectionException) {
+      e.printStackTrace()
+    }
   }
 
   private fun onPrintZPLOverTCPIP(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -202,53 +243,28 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
   }
 
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
-    var macAddress: String? = call.argument("mac")
     var data: ByteArray? = call.argument("data")
     var num: Int? = call.argument("copies")
     num = num ?: 1
-    Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
-    if (data == null || macAddress == null) {
+    if (data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
     Thread {
-      var conn: BluetoothLeConnection? = null
-      val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-      bluetoothAdapter.cancelDiscovery()
       try {
-        val bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice(macAddress)
-        if (bluetoothAdapter.isEnabled) {
-          Log.d(logTag, "${bluetoothDevice.bondState}")
-          Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
-          val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
-            bluetoothDevice.address,
-            bluetoothDevice.name ?: "zebraPrinter",
-            context
-          )
-          conn = BluetoothLeConnection(printer?.address, context)
-          conn.open()
-          if (conn.isConnected) {
-            for (number in 1..num) {
-              conn.write(data!!)
-              Log.d(logTag, "Label sent to printer")
-              Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
-              Log.d(logTag, "Delay completed")
-            }
-            result.success("Printed successfully")
-          } else {
-            result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
+        if (bluetoothConnection!!.isConnected) {
+          for (number in 1..num) {
+            bluetoothConnection!!.write(data!!)
+            Log.d(logTag, "Label sent to printer")
+            Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
+            Log.d(logTag, "Delay completed")
           }
+          result.success("Printed successfully")
         } else {
-          result.error("BLUETOOTH_DISABLED", "Bluetooth is not enabled on the device", null)
+          result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
         }
       } catch (e: ConnectionException) {
         e.printStackTrace()
         result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
-      } finally {
-        try {
-          conn?.close()
-        } catch (e: ConnectionException) {
-          e.printStackTrace()
-        }
       }
     }.start()
   }

@@ -16,9 +16,9 @@ class ZebraSdk {
     return await _channel.invokeMethod('printZPLOverTCPIP', params);
   }
 
-  static Future<bool?> printZPLOverBluetooth(String macAddress, {List<int>? data, int? copies}) async {
+  static Future<bool?> printZPLOverBluetooth({List<int>? data, int? copies}) async {
     try {
-      final Map<String, dynamic> params = {"mac": macAddress};
+      final Map<String, dynamic> params = {};
       if (data != null) {
         params['data'] = data;
       }
@@ -32,8 +32,28 @@ class ZebraSdk {
     }
   }
 
-  static Future<String?> printZPLOverBluetoothInsecure(String macAddress, {String? data}) async {
-    final Map<String, dynamic> params = {"mac": macAddress};
+  static Future<bool?> establishBluetoothConnection(String macAddress) async {
+    try {
+      final Map<String, dynamic> params = {"mac": macAddress};
+      if (macAddress != null) {
+        params['copies'] = macAddress;
+      }
+      return await _channel.invokeMethod('establishBluetoothConnection', params);
+    } on PlatformException catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool?> destroyBluetoothConnection() async {
+    try {
+      return await _channel.invokeMethod('destroyBluetoothConnection');
+    } on PlatformException catch (e) {
+      return false;
+    }
+  }
+
+  static Future<String?> printZPLOverBluetoothInsecure({String? data}) async {
+    final Map<String, dynamic> params = {};
     if (data != null) {
       params['data'] = data;
     }
