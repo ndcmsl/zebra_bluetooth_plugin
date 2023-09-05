@@ -278,16 +278,16 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         try {
           
             // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
-            thePrinterConn: Connection = BluetoothConnectionInsecure(macAddress)
+            thePrinterConn = BluetoothConnectionInsecure(macAddress)
 
             // Open the connection - physical connection is established here.
-            thePrinterConn.open()
+            thePrinterConn?.open()
 
             // This example prints "This is a ZPL test." near the top of the label.
             val zplData = "^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ"
 
             // Send the data to printer as a byte array.
-            thePrinterConn.write(data.toByteArray())
+            thePrinterConn?.write(data.toByteArray())
 
             // Make sure the data got to the printer before closing the connection
             Thread.sleep(500)
@@ -304,7 +304,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           } catch (e: Exception) {
             e.printStackTrace()
             Handler(Looper.getMainLooper()).post {
-              result.error("onPrintZplDataOverBluetooth", "Error during printing: ${e.message}", null)
+              result.error("onPrintZplDataOverBluetooth", "Error during closing the connection: ${e.message}", null)
             }
           }
         }
