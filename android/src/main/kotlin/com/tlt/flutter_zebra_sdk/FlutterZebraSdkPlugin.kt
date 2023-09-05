@@ -201,57 +201,77 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
   }
 
-  private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
+private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
     var data: ByteArray? = call.argument("data")
     var num: Int? = call.argument("copies")
     num = num ?: 1
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
     if (data == null || macAddress == null) {
-      result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
+        result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
     Thread {
-      var conn: BluetoothLeConnection? = null
-      val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-      bluetoothAdapter.cancelDiscovery()
-      try {
-        val bluetoothDevice: BluetoothDevice = bluetoothAdapter.getRemoteDevice(macAddress)
-        if (bluetoothAdapter.isEnabled) {
-          Log.d(logTag, "${bluetoothDevice.bondState}")
-          Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
-          val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
-            bluetoothDevice.address,
-            bluetoothDevice.name ?: "zebraPrinter",
-            context
-          )
-          conn = BluetoothLeConnection(printer?.address, context)
-          conn.open()
-          if (conn.isConnected) {
-            for (number in 1..num) {
-              conn.write(data!!)
-              Log.d(logTag, "Label sent to printer")
-              Thread.sleep(3000) // Adjust the delay between prints (e.g., 3000ms)
-              Log.d(logTag, "Delay completed")
-            }
-            result.success("Printed successfully")
-          } else {
-            result.error("CONNECTION_ERROR", "Could not establish connection with printer", null)
-          }
-        } else {
-          result.error("BLUETOOTH_DISABLED", "Bluetooth is not enabled on the device", null)
-        }
-      } catch (e: ConnectionException) {
-        e.printStackTrace()
-        result.error("CONNECTION_ERROR", "Error connecting to device: ${e.message}", null)
-      } finally {
+        var conn: BluetoothLeConnection? = null
+        val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        bluetoothAdapter.cancelDiscovery()
         try {
-          conn?.close()
-        } catch (e: ConnectionException) {
-          e.printStackTrace()
+            val bluetoothDevice: BluetoothDevice =
+                bluetoothAdapter.getRemoteDevice(macAddress)
+            if (bluetoothAdapter.isEnabled) {
+                Log.d(logTag, "${bluetoothDevice.bondState}")
+                Log.d(logTag, "${bluetoothDevice.name} ${bluetoothDevice.address}")
+
+                val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(
+                    bluetoothDevice.address,
+                    bluetoothDevice.name ?: "zebraPrinter",
+                    context
+                )
+
+                conn = BluetoothLeConnection(printer?.address, context)
+                var retryCount = 0
+                val maxRetryCount = 3
+                while (retryCount < maxRetryCount) {
+                    try {
+                        conn.open()
+                        if (conn.isConnected) {
+                            for (number in 1..num) {
+                                conn.write(data!!)
+                                Thread.sleep(1500)
+                            }
+                            result.success("Printed succesfull")
+                            break
+                        } else {
+                            retryCount++
+                            Thread.sleep(3000) // 3 seconds delay before retrying
+                        }
+                    } catch (e: ConnectionException) {
+                        e.printStackTrace()
+                        retryCount++
+                        Thread.sleep(3000) // 3 seconds delay before retrying
+                    }
+                }
+
+                if (retryCount == maxRetryCount) {
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("CONNECTION_ERROR", "Max retry attempts reached", null)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Handler(Looper.getMainLooper()).post {
+                result.error("UNEXPECTED_ERROR", "Unexpected error: ${e.message}", null)
+            }
+        } finally {
+            try {
+                conn?.close()
+            } catch (e: ConnectionException) {
+                e.printStackTrace()
+            }
         }
-      }
     }.start()
-  }
+}
+
 
 
   private fun reflectivelyInstatiateDiscoveredPrinterBluetoothLe(var0: String, var1: String, var2: Context): DiscoveredPrinter? {
