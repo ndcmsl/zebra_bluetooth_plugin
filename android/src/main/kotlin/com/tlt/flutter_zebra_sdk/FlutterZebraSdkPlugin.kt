@@ -269,17 +269,16 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     var macAddress: String? = call.argument("mac")
     var data: String? = call.argument("data")
     Log.d(logTag, "onPrintZplDataOverBluetooth $macAddress $data")
-    if (data == null) {
+    if (macAddress == null || data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
+      return
     }
     Thread {
+        var thePrinterConn: Connection? = null
         try {
-
+          
             // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
-            val thePrinterConn: Connection = BluetoothConnectionInsecure(macAddress)
-
-            // Initialize
-            Looper.prepare()
+            thePrinterConn: Connection = BluetoothConnectionInsecure(macAddress)
 
             // Open the connection - physical connection is established here.
             thePrinterConn.open()
@@ -288,18 +287,26 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             val zplData = "^XA^FO20,20^A0N,25,25^FDThis is a ZPL test.^FS^XZ"
 
             // Send the data to printer as a byte array.
-            thePrinterConn.write(zplData.toByteArray())
+            thePrinterConn.write(data.toByteArray())
 
             // Make sure the data got to the printer before closing the connection
             Thread.sleep(500)
 
-            // Close the insecure connection to release resources.
-            thePrinterConn.close()
-
-            Looper.myLooper()?.quit()
         } catch (e: Exception) {
             // Handle communications error here.
             e.printStackTrace()
+            Handler(Looper.getMainLooper()).post {
+              result.error("onPrintZplDataOverBluetooth", "Error during printing: ${e.message}", null)
+            }
+        } finally {
+          try {
+            thePrinterConn?.close()
+          } catch (e: Exception) {
+            e.printStackTrace()
+            Handler(Looper.getMainLooper()).post {
+              result.error("onPrintZplDataOverBluetooth", "Error during printing: ${e.message}", null)
+            }
+          }
         }
     }.start()
   }
