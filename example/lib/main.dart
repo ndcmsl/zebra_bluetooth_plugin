@@ -17,6 +17,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool isConnecting = false;
+  bool isDisconnecting = false;
   @override
   void initState() {
     super.initState();
@@ -87,31 +89,23 @@ class _MyAppState extends State<MyApp> {
     print(b);
   }
 
-  Future<void> onTestTCP() async {
-    String data;
-    data = '''
-    ''
-    ^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR6,6~SD15^JUS^LRN^CI0^XZ
-    ^XA
-    ^MMT
-    ^PW500
-    ^LL0240
-    ^LS0
-    ^FT144,33^A0N,25,24^FB111,1,0,C^FH\^FDITEM TITLE^FS
-    ^FT3,61^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDOption 1, Option 2, Option 3, Option 4, Opt^FS^CI0
-    ^FT3,84^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDion 5, Option 6 ^FS^CI0
-    ^FT34,138^A@N,25,24,TT0003M_^FB331,1,0,C^FH\^CI17^F8^FDOrder: https://eat.chat/phobac^FS^CI0
-    ^FT29,173^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FDPromotional Promotional Promotional^FS^CI0
-    ^FT29,193^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FD Promotional Promotional ^FS^CI0
-    ^FT106,233^A0N,25,24^FB188,1,0,C^FH\^FDPHO BAC HOA VIET^FS
-    ^PQ1,0,1,Y^XZ
-        ''';
-
-    final rep = ZebraSdk.printZPLOverTCPIP('192.168.1.26', data: data);
-    print(rep);
+  Future<void> destroyBluetoothConnection() async {
+    setState(() {
+      isDisconnecting = true;
+    });
+    try {
+      final rep = await ZebraSdk.destroyBluetoothConnection();
+      print(rep);
+    } catch (e) {
+      print('Error destroying connection: $e');
+    } finally {
+      setState(() {
+        isDisconnecting = false;
+      });
+    }
   }
 
-  Future<void> onTestBluetooth() async {
+  Future<void> printOverBluetooth() async {
     String data;
     data = '''
       ^XA
@@ -147,39 +141,31 @@ class _MyAppState extends State<MyApp> {
       arr = '50J171201608';
     }
     try {
-      final rep = await ZebraSdk.printZPLOverBluetooth(arr, data: utf8.encode(data));
+      final rep = await ZebraSdk.printOverBluetooth(utf8.encode(data));
       print('el booleano es: $rep');
     } catch (e) {
       print('llego al ultimo catch del codigo');
     }
   }
 
-  Future<void> onTestBluetoothInsecure() async {
-    String data;
-    data = '''
-    ''
-    ^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR6,6~SD15^JUS^LRN^CI0^XZ
-    ^XA
-    ^MMC
-    ^PW500
-    ^LL0240
-    ^LS0
-    ^FT144,33^A0N,25,24^FB111,1,0,C^FH\^FDITEM TITLE^FS
-    ^FT3,61^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDOption 1, Option 2, Option 3, Option 4, Opt^FS^CI0
-    ^FT3,84^A@N,20,20,TT0003M_^FB394,1,0,C^FH\^CI17^F8^FDion 5, Option 6 ^FS^CI0
-    ^FT34,138^A@N,25,24,TT0003M_^FB331,1,0,C^FH\^CI17^F8^FDOrder: https://eat.chat/phobac^FS^CI0
-    ^FT29,173^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FDPromotional Promotional Promotional^FS^CI0
-    ^FT29,193^A@N,20,20,TT0003M_^FB342,1,0,C^FH\^CI17^F8^FD Promotional Promotional ^FS^CI0
-    ^FT106,233^A0N,25,24^FB188,1,0,C^FH\^FDPHO BAC HOA VIET^FS
-    ^PQ1,0,1,Y^XZ
-        ''';
-
+  Future<void> establishBluetoothConnection() async {
+    setState(() {
+      isConnecting = true;
+    });
     String arr = '00:07:4D:DE:75:72';
     if (Platform.isIOS) {
       arr = '50J171201608';
     }
-    final rep = ZebraSdk.printZPLOverBluetoothInsecure(arr, data: data);
-    print(rep);
+    try {
+      final rep = await ZebraSdk.establishBluetoothConnection(arr);
+      print(rep);
+    } catch (e) {
+      print('Error establishing connection: $e');
+    } finally {
+      setState(() {
+        isConnecting = false;
+      });
+    }
   }
 
   @override
@@ -194,13 +180,32 @@ class _MyAppState extends State<MyApp> {
           child: Center(
             child: Column(
               children: [
-                TextButton(onPressed: onGetIPInfo, child: Text('onGetPrinterInfo')),
-                TextButton(onPressed: onTestConnect, child: Text('onTestConnect')),
-                TextButton(onPressed: onDiscovery, child: Text('Discovery')),
-                TextButton(onPressed: () => onDiscoveryUSB(context), child: Text('Discovery USB')),
-                TextButton(onPressed: onTestTCP, child: Text('Print TCP')),
-                TextButton(onPressed: () async => await onTestBluetooth(), child: Text('Print Bluetooth')),
-                TextButton(onPressed: onTestBluetoothInsecure, child: Text('Print Bluetooth Insecure')),
+                Row(
+                  children: [
+                    TextButton(
+                        onPressed: establishBluetoothConnection,
+                        child: Text('Abrir Conexion')
+                    ),
+                    if (isConnecting) CircularProgressIndicator(),
+                  ],
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                        onPressed: () async => await printOverBluetooth(),
+                        child: Text('Imprimir')
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                        onPressed: destroyBluetoothConnection,
+                        child: Text('Cerrar Conexion')
+                    ),
+                    if (isDisconnecting) CircularProgressIndicator(),
+                  ],
+                ),
               ],
             ),
           ),
