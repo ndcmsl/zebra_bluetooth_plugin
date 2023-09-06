@@ -241,9 +241,14 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
           if (conn != null) {
             conn!!.write(data)
           }
+          Handler(Looper.getMainLooper()).post {
+            result.success("Connection established successfully")
+          }
         } catch (e: Exception) {
-            // Handle communications error here.
             e.printStackTrace()
+            Handler(Looper.getMainLooper()).post {
+              result.error("UNEXPECTED_ERROR", "Unexpected error: ${e.message}", null)
+            }
         }
     }.start()
   }
