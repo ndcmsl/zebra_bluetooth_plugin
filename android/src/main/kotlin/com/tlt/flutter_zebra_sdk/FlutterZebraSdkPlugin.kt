@@ -168,10 +168,10 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
           if (conn!!.isConnected) {
             conn?.close()
             Thread.sleep(1000)  // Ajusta el tiempo de espera según sea necesario.
-            Handler(Looper.getMainLooper()).post {
-              result.success("Connection destroyed successfully")
-            }
           }
+        }
+        Handler(Looper.getMainLooper()).post {
+          result.success("Connection destroyed successfully")
         }
       } catch (e: Exception) {
         e.printStackTrace()
