@@ -240,6 +240,7 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
             // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
           if (conn != null) {
             conn!!.write(data)
+            Thread.sleep(1000)
           }
           Handler(Looper.getMainLooper()).post {
             result.success("Connection established successfully")
