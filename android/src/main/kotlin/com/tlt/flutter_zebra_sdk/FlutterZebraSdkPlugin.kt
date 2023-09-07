@@ -258,9 +258,10 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
   }
 
   private fun getOrCreateConnection(macAddress: String): BluetoothLeConnection {
-    return activeConnections[macAddress] ?: run {
+    //return activeConnections[macAddress] ?: run {
+      return run {
         val newConnection = BluetoothLeConnection(macAddress, context)
-        activeConnections[macAddress] = newConnection
+        // activeConnections[macAddress] = newConnection
         newConnection
     }
   }
