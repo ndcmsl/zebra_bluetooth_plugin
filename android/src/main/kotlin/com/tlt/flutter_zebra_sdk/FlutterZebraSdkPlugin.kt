@@ -201,6 +201,8 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
   }
 
+  private val activeConnections = mutableMapOf<String, BluetoothLeConnection>()
+
   private fun onPrintZplDataOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var macAddress: String? = call.argument("mac")
     var data: ByteArray? = call.argument("data")
@@ -210,8 +212,9 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     if (data == null || macAddress == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
     }
+    val conn = getOrCreateConnection(macAddress)
     Thread {
-      var conn: BluetoothLeConnection? = null
+      // var conn: BluetoothLeConnection? = null
       val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
       bluetoothAdapter.cancelDiscovery()
       try {
@@ -228,7 +231,7 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             context
           )
           // Conexion comun a cualquier dispositivo bluetooth
-          conn = BluetoothLeConnection(printer?.address,context)
+          // conn = BluetoothLeConnection(printer?.address,context)
           conn.open()
           if (conn.isConnected) {
             for (number in 1..num) {
@@ -245,7 +248,8 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
       } finally {
         try {
-          conn?.close()
+          // conn?.close()
+          closeConnection(macAddress)
         } catch (e: ConnectionException) {
           e.printStackTrace()
         }
@@ -253,6 +257,18 @@ class FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }.start()
   }
 
+  private fun getOrCreateConnection(macAddress: String): BluetoothLeConnection {
+    return activeConnections[macAddress] ?: run {
+        val newConnection = BluetoothLeConnection(macAddress, context)
+        activeConnections[macAddress] = newConnection
+        newConnection
+    }
+  }
+
+  private fun closeConnection(macAddress: String) {
+        activeConnections[macAddress]?.close()
+        activeConnections.remove(macAddress)
+    }
 
   private fun reflectivelyInstatiateDiscoveredPrinterBluetoothLe(var0: String, var1: String, var2: Context): DiscoveredPrinter? {
     try {
