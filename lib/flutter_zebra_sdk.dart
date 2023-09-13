@@ -19,10 +19,13 @@ class ZebraSdk {
     }
   }
 
-  static Future<String?> printOverBluetooth(List<int>? data) async {
+  static Future<String?> printOverBluetooth(List<int>? data, int? copies) async {
     final Map<String, dynamic> params = {"data": data};
     if (data != null) {
       params['data'] = data;
+    }
+    if (copies != null) {
+        params['copies'] = copies;
     }
     return await _channel.invokeMethod('printOverBluetooth', params);
   }
