@@ -242,7 +242,7 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
             // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
           if (conn != null) {
             for (number in 1..num) {
-              conn.write(data!!)
+              conn!!.write(data)
               Thread.sleep(1000)
             }
           }
