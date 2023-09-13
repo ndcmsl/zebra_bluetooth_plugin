@@ -231,6 +231,8 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
 
   private fun printOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {
     var data: ByteArray? = call.argument("data")
+    var num: Int? = call.argument("copies")
+    num = num ?: 1
     Log.d(logTag, "onPrintZplDataOverBluetooth $data")
     if (data == null) {
       result.error("onPrintZplDataOverBluetooth", "Data is required", "Data Content")
@@ -239,8 +241,10 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
         try {
             // Instantiate insecure connection for given Bluetooth&reg; MAC Address.
           if (conn != null) {
-            conn!!.write(data)
-            Thread.sleep(1000)
+            for (number in 1..num) {
+              conn.write(data!!)
+              Thread.sleep(1000)
+            }
           }
           Handler(Looper.getMainLooper()).post {
             result.success("Connection established successfully")
