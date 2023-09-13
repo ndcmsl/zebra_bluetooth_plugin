@@ -1,0 +1,482 @@
+Index: android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.tlt.flutter_zebra_sdk\r\n\r\nimport android.app.Activity\r\nimport android.bluetooth.BluetoothAdapter\r\nimport android.bluetooth.BluetoothDevice\r\nimport android.content.Context\r\nimport android.os.Handler\r\nimport android.os.Looper\r\nimport android.util.Log\r\nimport androidx.annotation.NonNull\r\nimport com.google.gson.Gson\r\nimport com.zebra.sdk.btleComm.BluetoothLeConnection\r\nimport com.zebra.sdk.comm.Connection\r\nimport com.zebra.sdk.comm.ConnectionException\r\nimport com.zebra.sdk.comm.TcpConnection\r\nimport com.zebra.sdk.printer.discovery.DiscoveredPrinter\r\nimport com.zebra.sdk.printer.discovery.DiscoveredPrinterNetwork\r\nimport com.zebra.sdk.printer.discovery.DiscoveryHandler\r\nimport com.zebra.sdk.printer.discovery.DiscoveryUtil\r\nimport com.zebra.sdk.printer.discovery.NetworkDiscoverer\r\nimport com.zebra.sdk.printer.discovery.UsbDiscoverer\r\nimport io.flutter.embedding.engine.plugins.FlutterPlugin\r\nimport io.flutter.embedding.engine.plugins.activity.ActivityAware\r\nimport io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding\r\nimport io.flutter.plugin.common.MethodCall\r\nimport io.flutter.plugin.common.MethodChannel\r\nimport io.flutter.plugin.common.MethodChannel.MethodCallHandler\r\nimport io.flutter.plugin.common.MethodChannel.Result\r\n\r\n\r\n// import kotlinx.serialization.*\r\n// import kotlinx.serialization.json.*\r\n//import kotlinx.serialization.internal.*\r\n\r\n\r\ninterface JSONConvertable {\r\n  fun toJSON(): String = Gson().toJson(this)\r\n}\r\n\r\ninline fun <reified T : JSONConvertable> String.toObject(): T = Gson().fromJson(this, T::class.java)\r\n\r\ndata class ZebreResult(\r\n        var type: String? = null,\r\n        var success: Boolean? = null,\r\n        var message: String? = null,\r\n        var content: Any? = null\r\n) : JSONConvertable\r\n\r\nclass ZebraPrinterInfo(\r\n        var address: String? = null,\r\n        var productName: String? = null,\r\n        var serialNumber: String? = null,\r\n        var availableInterfaces: Any? = null,\r\n        var darkness: String? = null,\r\n        var availableLanguages: Any? = null,\r\n        val linkOSMajorVer: Long? = null,\r\n        val firmwareVer: String? = null,\r\n        var jsonPortNumber: String? = null,\r\n        val primaryLanguage: String? = null\r\n): JSONConvertable\r\n\r\n\r\n/** FlutterZebraSdkPlugin */\r\nclass FlutterZebraSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {\r\n  // / The MethodChannel that will the communication between Flutter and native Android\r\n  // /\r\n  // / This local reference serves to register the plugin with the Flutter Engine and unregister it\r\n  // / when the Flutter Engine is detached from the Activity\r\n  private lateinit var channel: MethodChannel\r\n  private var logTag: String = \"ZebraSDK\"\r\n  private lateinit var context: Context\r\n  private lateinit var activity: Activity\r\n  var conn: BluetoothLeConnection? = null\r\n  var printers: MutableList<ZebraPrinterInfo> = ArrayList()\r\n\r\n  override fun onAttachedToActivity(binding: ActivityPluginBinding) {\r\n    activity = binding.activity;\r\n  }\r\n\r\n  override fun onDetachedFromActivityForConfigChanges() {\r\n    TODO(\"Not yet implemented\")\r\n  }\r\n\r\n  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {\r\n    TODO(\"Not yet implemented\")\r\n  }\r\n\r\n  override fun onDetachedFromActivity() {\r\n    TODO(\"Not yet implemented\")\r\n  }\r\n\r\n  override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {\r\n    channel = MethodChannel(flutterPluginBinding.binaryMessenger, \"flutter_zebra_sdk\")\r\n    channel.setMethodCallHandler(this)\r\n    context = flutterPluginBinding.applicationContext\r\n  }\r\n\r\n  override fun onMethodCall(@NonNull call: MethodCall, @NonNull rawResult: Result) {\r\n    val result: MethodResultWrapper = MethodResultWrapper(rawResult)\r\n    Thread(MethodRunner(call, result)).start()\r\n  }\r\n\r\n  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {\r\n    channel.setMethodCallHandler(null)\r\n  }\r\n\r\n  inner class MethodRunner(call: MethodCall, result: Result) : Runnable {\r\n    private val call: MethodCall = call\r\n    private val result: Result = result\r\n\r\n    override fun run() {\r\n      when (call.method) {\r\n        \"destroyBluetoothConnection\" -> {\r\n          destroyBluetoothConnection(call, result)\r\n        }\r\n        \"establishBluetoothConnection\" -> {\r\n          establishBluetoothConnection(call, result)\r\n        }\r\n        \"onDiscovery\" -> {\r\n          onDiscovery(call, result)\r\n        }\r\n        \"onDiscoveryUSB\" -> {\r\n          onDiscoveryUSB(call, result)\r\n        }\r\n\r\n        \"onGetPrinterInfo\" -> {\r\n          onGetPrinterInfo(call, result)\r\n        }\r\n        \"isPrinterConnected\" -> {\r\n          isPrinterConnected(call, result)\r\n        }\r\n\r\n        \"printOverBluetooth\" -> {\r\n          printOverBluetooth(call, result)\r\n        }\r\n        else -> result.notImplemented()\r\n      }\r\n    }\r\n  }\r\n\r\n  class MethodResultWrapper(methodResult: Result) : Result {\r\n\r\n    private val methodResult: Result = methodResult\r\n    private val handler: Handler = Handler(Looper.getMainLooper())\r\n\r\n    override fun success(result: Any?) {\r\n      handler.post { methodResult.success(result) }\r\n    }\r\n\r\n    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {\r\n      handler.post { methodResult.error(errorCode, errorMessage, errorDetails) }\r\n    }\r\n\r\n    override fun notImplemented() {\r\n      handler.post { methodResult.notImplemented() }\r\n    }\r\n  }\r\n\r\n  private fun createTcpConnect(ip: String, port: Int): TcpConnection {\r\n    return TcpConnection(ip, port)\r\n  }\r\n\r\n  private fun destroyBluetoothConnection(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    Thread {\r\n      try {\r\n        // Asumiendo que \"conn\" es una variable que referencia a tu conexión actual.\r\n        if (conn != null) {\r\n          if (conn!!.isConnected) {\r\n            conn?.close()\r\n            Thread.sleep(1000)  // Ajusta el tiempo de espera según sea necesario.\r\n          }\r\n        }\r\n        Handler(Looper.getMainLooper()).post {\r\n          result.success(\"Connection destroyed successfully\")\r\n        }\r\n      } catch (e: Exception) {\r\n        e.printStackTrace()\r\n        Handler(Looper.getMainLooper()).post {\r\n          result.error(\"UNEXPECTED_ERROR\", \"Unexpected error: ${e.message}\", null)\r\n        }\r\n      }\r\n    }.start()\r\n  }\r\n\r\nprivate fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var macAddress: String? = call.argument(\"mac\")\r\n    Log.d(logTag, \"onPrintZplDataOverBluetooth $macAddress\")\r\n    Thread {\r\n        val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()\r\n        bluetoothAdapter.cancelDiscovery()\r\n        try {\r\n            val bluetoothDevice: BluetoothDevice =\r\n                bluetoothAdapter.getRemoteDevice(macAddress)\r\n            if (bluetoothAdapter.isEnabled) {\r\n                Log.d(logTag, \"${bluetoothDevice.bondState}\")\r\n                Log.d(logTag, \"${bluetoothDevice.name} ${bluetoothDevice.address}\")\r\n\r\n                val printer: DiscoveredPrinter? = reflectivelyInstatiateDiscoveredPrinterBluetoothLe(\r\n                    bluetoothDevice.address,\r\n                    bluetoothDevice.name ?: \"zebraPrinter\",\r\n                    context\r\n                )\r\n                conn = BluetoothLeConnection(printer?.address, context)\r\n                conn!!.open()\r\n              Thread.sleep(2000)\r\n              Handler(Looper.getMainLooper()).post {\r\n                result.success(\"Connection established successfully\")\r\n              }\r\n            }\r\n        } catch (e: Exception) {\r\n            e.printStackTrace()\r\n            Handler(Looper.getMainLooper()).post {\r\n                result.error(\"UNEXPECTED_ERROR\", \"Unexpected error: ${e.message}\", null)\r\n            }\r\n        }\r\n    }.start()\r\n}\r\n\r\n\r\n\r\n  private fun reflectivelyInstatiateDiscoveredPrinterBluetoothLe(var0: String, var1: String, var2: Context): DiscoveredPrinter? {\r\n    try {\r\n      val var3 = Class.forName(\"com.zebra.sdk.btleComm.DiscoveredPrinterBluetoothLe\")\r\n      val var4 = var3.getDeclaredConstructor(String::class.java, String::class.java, Context::class.java)\r\n      var4.isAccessible = true\r\n      return var4.newInstance(var0, var1, context) as DiscoveredPrinter\r\n    } catch (var5: Exception) {\r\n      return null;\r\n    }\r\n  }\r\n\r\n  private fun printOverBluetooth(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var data: ByteArray? = call.argument(\"data\")\r\n    Log.d(logTag, \"onPrintZplDataOverBluetooth $data\")\r\n    if (data == null) {\r\n      result.error(\"onPrintZplDataOverBluetooth\", \"Data is required\", \"Data Content\")\r\n    }\r\n    Thread {\r\n        try {\r\n            // Instantiate insecure connection for given Bluetooth&reg; MAC Address.\r\n          if (conn != null) {\r\n            conn!!.write(data)\r\n          }\r\n          Handler(Looper.getMainLooper()).post {\r\n            result.success(\"Connection established successfully\")\r\n          }\r\n        } catch (e: Exception) {\r\n            e.printStackTrace()\r\n            Handler(Looper.getMainLooper()).post {\r\n              result.error(\"UNEXPECTED_ERROR\", \"Unexpected error: ${e.message}\", null)\r\n            }\r\n        }\r\n    }.start()\r\n  }\r\n\r\n  private fun onGetPrinterInfo(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var ipE: String? = call.argument(\"ip\")\r\n    var ipPort: Int? = call.argument(\"port\")\r\n    var ipAddress: String = \"\"\r\n    var port: Int = TcpConnection.DEFAULT_ZPL_TCP_PORT\r\n    if(ipE != null){\r\n      ipAddress = ipE\r\n    } else {\r\n      result.error(\"PrintZPLOverTCPIP\", \"IP Address is required\", \"Data Content\")\r\n      return\r\n    }\r\n    if(ipPort != null){\r\n      port = ipPort\r\n    }\r\n    val conn: Connection = createTcpConnect(ipAddress, port)\r\n    try {\r\n      // Open the connection - physical connection is established here.\r\n      conn.open()\r\n      // Send the data to printer as a byte array.\r\n      val dataMap = DiscoveryUtil.getDiscoveryDataMap(conn)\r\n      Log.d(logTag, \"onGetIPInfo $dataMap\")\r\n      var resp = ZebreResult()\r\n      resp.success = true\r\n      resp.message= \"Successfully!\"\r\n      var printer: ZebraPrinterInfo = ZebraPrinterInfo()\r\n      printer.serialNumber = dataMap[\"SERIAL_NUMBER\"]\r\n      printer.address = dataMap[\"ADDRESS\"]\r\n      printer.availableInterfaces = dataMap[\"AVAILABLE_INTERFACES\"]\r\n      printer.availableLanguages = dataMap[\"AVAILABLE_LANGUAGES\"]\r\n      printer.darkness = dataMap[\"DARKNESS\"]\r\n      printer.jsonPortNumber = dataMap[\"JSON_PORT_NUMBER\"]\r\n      printer.productName = dataMap[\"PRODUCT_NAME\"]\r\n      resp.content = printer\r\n      result.success(resp.toJSON())\r\n    } catch (e: ConnectionException) {\r\n      // Handle communications error here.\r\n      e.printStackTrace()\r\n      result.error(\"Error\", \"onPrintZPLOverTCPIP\", e)\r\n    } finally {\r\n      // Close the connection to release resources.\r\n      conn.close()\r\n    }\r\n  }\r\n\r\n  private fun isPrinterConnected(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var ipE: String? = call.argument(\"ip\")\r\n    var ipPort: Int? = call.argument(\"port\")\r\n    var ipAddress: String = \"\"\r\n    var port: Int = TcpConnection.DEFAULT_ZPL_TCP_PORT\r\n    if(ipE != null){\r\n      ipAddress = ipE\r\n    } else {\r\n      result.error(\"isPrinterConnected\", \"IP Address is required\", \"Data Content\")\r\n      return\r\n    }\r\n    if(ipPort != null){\r\n      port = ipPort\r\n    }\r\n    val conn: Connection = createTcpConnect(ipAddress, port)\r\n    var resp = ZebreResult()\r\n    try {\r\n      // Open the connection - physical connection is established here.\r\n      conn.open()\r\n      // Send the data to printer as a byte array.\r\n      val dataMap = DiscoveryUtil.getDiscoveryDataMap(conn)\r\n      Log.d(logTag, \"onGetIPInfo $dataMap\")\r\n      var isConnected: Boolean = conn.isConnected\r\n      resp.success = isConnected\r\n      resp.message =  \"Unconnected\"\r\n      if(isConnected){\r\n        resp.message =  \"Connected\"\r\n      }\r\n      result.success(resp.toJSON())\r\n    } catch (e: ConnectionException) {\r\n      // Handle communications error here.\r\n      e.printStackTrace()\r\n      resp.success = false\r\n      resp.message =  \"Unconnected\"\r\n      result.success(resp.toJSON())\r\n//      result.error(\"Error\", \"onPrintZPLOverTCPIP\", e)\r\n    } finally {\r\n      // Close the connection to release resources.\r\n      conn.close()\r\n    }\r\n  }\r\n\r\n  private fun onDiscovery(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var handleNet = object : DiscoveryHandler {\r\n      override fun foundPrinter(p0: DiscoveredPrinter) {\r\n        Log.d(logTag, \"foundPrinter $p0\")\r\n        var dataMap = p0.discoveryDataMap\r\n        var address = dataMap[\"ADDRESS\"]\r\n        var isExist = printers.any { s -> s.address == address }\r\n        if(!isExist){\r\n          var printer: ZebraPrinterInfo = ZebraPrinterInfo()\r\n          printer.serialNumber = dataMap[\"SERIAL_NUMBER\"]\r\n          printer.address = address\r\n          printer.availableInterfaces = dataMap[\"AVAILABLE_INTERFACES\"]\r\n          printer.availableLanguages = dataMap[\"AVAILABLE_LANGUAGES\"]\r\n          printer.darkness = dataMap[\"DARKNESS\"]\r\n          printer.jsonPortNumber = dataMap[\"JSON_PORT_NUMBER\"]\r\n          printer.productName = dataMap[\"PRODUCT_NAME\"]\r\n          printers.add(printer)\r\n        }\r\n      }\r\n\r\n      override fun discoveryFinished() {\r\n        Log.d(logTag, \"discoveryFinished $printers\")\r\n        var resp = ZebreResult()\r\n        resp.success = true\r\n        resp.message= \"Successfully!\"\r\n        var printersJSON = Gson().toJson(printers)\r\n        resp.content = printersJSON\r\n        result.success(resp.toJSON())\r\n      }\r\n\r\n      override fun discoveryError(p0: String?) {\r\n        Log.d(logTag, \"discoveryError $p0\")\r\n        result.error(\"discoveryError\", \"discoveryError\", p0)\r\n      }\r\n    }\r\n    try {\r\n      printers.clear()\r\n      NetworkDiscoverer.findPrinters(handleNet)\r\n    } catch (e: Exception) {\r\n      e.printStackTrace()\r\n      result.error(\"Error\", \"onDiscovery\", e)\r\n    }\r\n     var net =  DiscoveredPrinterNetwork(\"a\", 1)\r\n\r\n  }\r\n\r\n\r\n  private fun onDiscoveryUSB(@NonNull call: MethodCall, @NonNull result: Result) {\r\n    var handleNet = object : DiscoveryHandler {\r\n      override fun foundPrinter(p0: DiscoveredPrinter) {\r\n        Log.d(logTag, \"foundPrinter $p0\")\r\n        var dataMap = p0.discoveryDataMap\r\n        var address = dataMap[\"ADDRESS\"]\r\n        var isExist = printers.any { s -> s.address == address }\r\n        if(!isExist){\r\n          var printer: ZebraPrinterInfo = ZebraPrinterInfo()\r\n          printer.serialNumber = dataMap[\"SERIAL_NUMBER\"]\r\n          printer.address = address\r\n          printer.availableInterfaces = dataMap[\"AVAILABLE_INTERFACES\"]\r\n          printer.availableLanguages = dataMap[\"AVAILABLE_LANGUAGES\"]\r\n          printer.darkness = dataMap[\"DARKNESS\"]\r\n          printer.jsonPortNumber = dataMap[\"JSON_PORT_NUMBER\"]\r\n          printer.productName = dataMap[\"PRODUCT_NAME\"]\r\n          printers.add(printer)\r\n        }\r\n      }\r\n\r\n      override fun discoveryFinished() {\r\n        Log.d(logTag, \"discoveryUSBFinished $printers\")\r\n        var resp = ZebreResult()\r\n        resp.success = true\r\n        resp.message= \"Successfully!\"\r\n        var printersJSON = Gson().toJson(printers)\r\n        resp.content = printersJSON\r\n        result.success(resp.toJSON())\r\n      }\r\n\r\n      override fun discoveryError(p0: String?) {\r\n        Log.d(logTag, \"discoveryUSBError $p0\")\r\n        result.error(\"discoveryUSBError\", \"discoveryUSBError\", p0)\r\n      }\r\n    }\r\n    try {\r\n      printers.clear()\r\n      UsbDiscoverer.findPrinters(context, handleNet)\r\n    } catch (e: Exception) {\r\n      e.printStackTrace()\r\n      result.error(\"Error\", \"onDiscoveryUSB\", e)\r\n    }\r\n\r\n  }\r\n\r\n\r\n}\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt b/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt
+--- a/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt	(revision e11939816eb57cdada9a997ceedea245f672faa5)
++++ b/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt	(date 1694071399148)
+@@ -3,6 +3,8 @@
+ import android.app.Activity
+ import android.bluetooth.BluetoothAdapter
+ import android.bluetooth.BluetoothDevice
++import android.bluetooth.BluetoothServerSocket
++import android.bluetooth.BluetoothSocket
+ import android.content.Context
+ import android.os.Handler
+ import android.os.Looper
+@@ -18,6 +20,7 @@
+ import com.zebra.sdk.printer.discovery.DiscoveryHandler
+ import com.zebra.sdk.printer.discovery.DiscoveryUtil
+ import com.zebra.sdk.printer.discovery.NetworkDiscoverer
++import com.zebra.sdk.comm.BluetoothConnectionInsecure
+ import com.zebra.sdk.printer.discovery.UsbDiscoverer
+ import io.flutter.embedding.engine.plugins.FlutterPlugin
+ import io.flutter.embedding.engine.plugins.activity.ActivityAware
+@@ -26,6 +29,11 @@
+ import io.flutter.plugin.common.MethodChannel
+ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+ import io.flutter.plugin.common.MethodChannel.Result
++import java.io.IOException
++import java.io.InputStream
++import java.io.OutputStream
++import java.io.UnsupportedEncodingException
++import java.util.UUID
+ 
+ 
+ // import kotlinx.serialization.*
+@@ -433,3 +441,370 @@
+ 
+ 
+ }
++
++class BluetoothService(context: Context?, private val mHandler: Handler) {
++  private val mAdapter = BluetoothAdapter.getDefaultAdapter()
++  private var mAcceptThread: AcceptThread? = null
++  private var mConnectThread: ConnectThread? = null
++  private var mConnectedThread: ConnectedThread? = null
++  private var mState = 0
++
++  @get:Synchronized
++  val isAvailable: Boolean
++    get() = mAdapter != null
++
++  @get:Synchronized
++  val isBTopen: Boolean
++    get() = mAdapter!!.isEnabled
++
++  @Synchronized
++  fun getDevByMac(mac: String?): BluetoothDevice {
++    return mAdapter!!.getRemoteDevice(mac)
++  }
++
++  @Synchronized
++  fun getDevByName(name: String?): BluetoothDevice? {
++    var tem_dev: BluetoothDevice? = null
++    val pairedDevices: Set<*>? = pairedDev
++    if (pairedDevices!!.size > 0) {
++      val var5 = pairedDevices.iterator()
++      while (var5.hasNext()) {
++        val device = var5.next() as BluetoothDevice
++        if (device.name.indexOf(name!!) != -1) {
++          tem_dev = device
++          break
++        }
++      }
++    }
++    return tem_dev
++  }
++
++  @Synchronized
++  fun sendMessage(message: String, charset: String?) {
++    if (message.length > 0) {
++      val send: ByteArray
++      send = try {
++        message.toByteArray(charset(charset!!))
++      } catch (var5: UnsupportedEncodingException) {
++        message.toByteArray()
++      }
++      write(send)
++      val tail = byteArrayOf(10, 13, 0)
++      write(tail)
++    }
++  }
++
++  @get:Synchronized
++  val pairedDev: Set<BluetoothDevice>?
++    get() {
++      var dev: Set<*>? = null
++      dev = mAdapter!!.bondedDevices
++      return dev
++    }
++
++  @Synchronized
++  fun cancelDiscovery(): Boolean {
++    return mAdapter!!.cancelDiscovery()
++  }
++
++  @get:Synchronized
++  val isDiscovering: Boolean
++    get() = mAdapter!!.isDiscovering
++
++  @Synchronized
++  fun startDiscovery(): Boolean {
++    return mAdapter!!.startDiscovery()
++  }
++
++  @get:Synchronized
++  @set:Synchronized
++  var state: Int
++    get() = mState
++    private set(state) {
++      mState = state
++      mHandler.obtainMessage(1, state, -1).sendToTarget()
++    }
++
++  @Synchronized
++  fun start() {
++    Log.d("BluetoothService", "start")
++    if (mConnectThread != null) {
++      mConnectThread!!.cancel()
++      mConnectThread = null
++    }
++    if (mConnectedThread != null) {
++      mConnectedThread!!.cancel()
++      mConnectedThread = null
++    }
++    if (mAcceptThread == null) {
++      mAcceptThread = AcceptThread()
++      mAcceptThread!!.start()
++    }
++    state = 1
++  }
++
++  @Synchronized
++  fun connect(device: BluetoothDevice) {
++    Log.d("BluetoothService", "connect to: $device")
++    if (mState == 2 && mConnectThread != null) {
++      mConnectThread!!.cancel()
++      mConnectThread = null
++    }
++    if (mConnectedThread != null) {
++      mConnectedThread!!.cancel()
++      mConnectedThread = null
++    }
++    mConnectThread = ConnectThread(device)
++    mConnectThread!!.start()
++    state = 2
++  }
++
++  @Synchronized
++  fun connected(socket: BluetoothSocket?, device: BluetoothDevice?) {
++    Log.d("BluetoothService", "connected")
++    if (mConnectThread != null) {
++      mConnectThread!!.cancel()
++      mConnectThread = null
++    }
++    if (mConnectedThread != null) {
++      mConnectedThread!!.cancel()
++      mConnectedThread = null
++    }
++    if (mAcceptThread != null) {
++      mAcceptThread!!.cancel()
++      mAcceptThread = null
++    }
++    mConnectedThread = ConnectedThread(socket)
++    mConnectedThread!!.start()
++    val msg = mHandler.obtainMessage(4)
++    mHandler.sendMessage(msg)
++    state = 3
++  }
++
++  @Synchronized
++  fun stop() {
++    Log.d("BluetoothService", "stop")
++    state = 0
++    if (mConnectThread != null) {
++      mConnectThread!!.cancel()
++      mConnectThread = null
++    }
++    if (mConnectedThread != null) {
++      mConnectedThread!!.cancel()
++      mConnectedThread = null
++    }
++    if (mAcceptThread != null) {
++      mAcceptThread!!.cancel()
++      mAcceptThread = null
++    }
++  }
++
++  fun write(out: ByteArray?) {
++    var r: ConnectedThread?
++    synchronized(this) {
++      if (mState != 3) {
++        return
++      }
++      r = mConnectedThread
++    }
++    r!!.write(out)
++  }
++
++  private fun connectionFailed() {
++    state = 1
++    val msg = mHandler.obtainMessage(6)
++    mHandler.sendMessage(msg)
++  }
++
++  private fun connectionLost() {
++    val msg = mHandler.obtainMessage(5)
++    mHandler.sendMessage(msg)
++  }
++
++  private inner class AcceptThread : Thread() {
++    private val mmServerSocket: BluetoothServerSocket?
++
++    init {
++      var tmp: BluetoothServerSocket? = null
++      try {
++        tmp = mAdapter!!.listenUsingRfcommWithServiceRecord("BTPrinter", MY_UUID)
++      } catch (var4: IOException) {
++        Log.e("BluetoothService", "listen() failed", var4)
++      }
++      mmServerSocket = tmp
++    }
++
++    override fun run() {
++      Log.d("BluetoothService", "BEGIN mAcceptThread$this")
++      this.name = "AcceptThread"
++      var socket: BluetoothSocket? = null
++      while (mState != 3) {
++        Log.d("AcceptThread线程运行", "正在运行......")
++        socket = try {
++          mmServerSocket!!.accept()
++        } catch (var6: IOException) {
++          Log.e("BluetoothService", "accept() failed", var6)
++          break
++        }
++        if (socket != null) {
++          val e = this@BluetoothService
++          synchronized(this@BluetoothService) {
++            when (mState) {
++              0, 3 -> try {
++                socket.close()
++              } catch (var4: IOException) {
++                Log.e(
++                  "BluetoothService",
++                  "Could not close unwanted socket",
++                  var4
++                )
++              }
++
++              1, 2 -> connected(socket, socket.remoteDevice)
++              else -> {}
++            }
++          }
++        }
++      }
++      Log.i("BluetoothService", "END mAcceptThread")
++    }
++
++    fun cancel() {
++      Log.d("BluetoothService", "cancel $this")
++      try {
++        mmServerSocket!!.close()
++      } catch (var2: IOException) {
++        Log.e("BluetoothService", "close() of server failed", var2)
++      }
++    }
++  }
++
++  private inner class ConnectThread(private val mmDevice: BluetoothDevice) :
++    Thread() {
++    private val mmSocket: BluetoothSocket?
++
++    init {
++      var tmp: BluetoothSocket? = null
++      try {
++        tmp = mmDevice.createRfcommSocketToServiceRecord(MY_UUID)
++      } catch (var5: IOException) {
++        Log.e("BluetoothService", "create() failed", var5)
++      }
++      mmSocket = tmp
++    }
++
++    override fun run() {
++      Log.i("BluetoothService", "BEGIN mConnectThread")
++      this.name = "ConnectThread"
++      mAdapter!!.cancelDiscovery()
++      try {
++        mmSocket!!.connect()
++      } catch (var5: IOException) {
++        connectionFailed()
++        try {
++          mmSocket!!.close()
++        } catch (var3: IOException) {
++          Log.e("BluetoothService", "unable to close() socket during connection failure", var3)
++        }
++        this@BluetoothService.start()
++        return
++      }
++      val e = this@BluetoothService
++      synchronized(this@BluetoothService) {
++        mConnectThread = null
++      }
++      connected(mmSocket, mmDevice)
++    }
++
++    fun cancel() {
++      try {
++        mmSocket!!.close()
++      } catch (var2: IOException) {
++        Log.e("BluetoothService", "close() of connect socket failed", var2)
++      }
++    }
++  }
++
++  private inner class ConnectedThread(socket: BluetoothSocket?) :
++    Thread() {
++    private val mmSocket: BluetoothSocket?
++    private val mmInStream: InputStream?
++    private val mmOutStream: OutputStream?
++
++    init {
++      Log.d("BluetoothService", "create ConnectedThread")
++      mmSocket = socket
++      var tmpIn: InputStream? = null
++      var tmpOut: OutputStream? = null
++      try {
++        tmpIn = socket!!.inputStream
++        tmpOut = socket.outputStream
++      } catch (var6: IOException) {
++        Log.e("BluetoothService", "temp sockets not created", var6)
++      }
++      mmInStream = tmpIn
++      mmOutStream = tmpOut
++    }
++
++    override fun run() {
++      Log.d("ConnectedThread线程运行", "正在运行......")
++      Log.i("BluetoothService", "BEGIN mConnectedThread")
++      try {
++        while (true) {
++          val e = ByteArray(256)
++          val bytes = mmInStream!!.read(e)
++          if (bytes <= 0) {
++            Log.e("BluetoothService", "disconnected")
++            connectionLost()
++            if (mState != 0) {
++              Log.e("BluetoothService", "disconnected")
++              this@BluetoothService.start()
++            }
++            break
++          }
++          mHandler.obtainMessage(2, bytes, -1, e).sendToTarget()
++        }
++      } catch (var3: IOException) {
++        Log.e("BluetoothService", "disconnected", var3)
++        connectionLost()
++        if (mState != 0) {
++          this@BluetoothService.start()
++        }
++      }
++    }
++
++    fun write(buffer: ByteArray?) {
++      try {
++        mmOutStream!!.write(buffer)
++        mHandler.obtainMessage(3, -1, -1, buffer).sendToTarget()
++      } catch (var3: IOException) {
++        Log.e("BluetoothService", "Exception during write", var3)
++      }
++    }
++
++    fun cancel() {
++      try {
++        mmSocket!!.close()
++      } catch (var2: IOException) {
++        Log.e("BluetoothService", "close() of connect socket failed", var2)
++      }
++    }
++  }
++
++  companion object {
++    private const val TAG = "BluetoothService"
++    private const val D = true
++    const val MESSAGE_STATE_CHANGE = 1
++    const val MESSAGE_READ = 2
++    const val MESSAGE_WRITE = 3
++    const val MESSAGE_DEVICE_NAME = 4
++    const val MESSAGE_CONNECTION_LOST = 5
++    const val MESSAGE_UNABLE_CONNECT = 6
++    private const val NAME = "BTPrinter"
++    private val MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
++    const val STATE_NONE = 0
++    const val STATE_LISTEN = 1
++    const val STATE_CONNECTING = 2
++    const val STATE_CONNECTED = 3
++  }
++}
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"AutoImportSettings\">\r\n    <option name=\"autoReloadType\" value=\"NONE\" />\r\n  </component>\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"fa6519bf-01df-413c-8c28-d7d041c67682\" name=\"Default Changelist\" comment=\"\">\r\n      <change beforePath=\"$PROJECT_DIR$/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/example/android/.idea/gradle.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/example/android/.idea/gradle.xml\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/example/android/.idea/misc.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/example/android/.idea/misc.xml\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/example/android/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/example/android/.idea/workspace.xml\" afterDir=\"false\" />\r\n    </list>\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"CodeStyleSettingsInfer\">\r\n    <option name=\"done\" value=\"true\" />\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"MarkdownSettingsMigration\">\r\n    <option name=\"stateVersion\" value=\"1\" />\r\n  </component>\r\n  <component name=\"ProjectCodeStyleSettingsMigration\">\r\n    <option name=\"version\" value=\"2\" />\r\n  </component>\r\n  <component name=\"ProjectId\" id=\"1lioWsrv2dp4RN5fFiVRnTqZpib\" />\r\n  <component name=\"ProjectLevelVcsManager\" settingsEditedManually=\"true\" />\r\n  <component name=\"ProjectViewState\">\r\n    <option name=\"showExcludedFiles\" value=\"false\" />\r\n    <option name=\"showLibraryContents\" value=\"true\" />\r\n  </component>\r\n  <component name=\"PropertiesComponent\">{\r\n  &quot;keyToString&quot;: {\r\n    &quot;AnalyzeApkAction.lastApkPath&quot;: &quot;C:/Users/SKLUM/Documents/perole.apk/com.zebra.printersetup-GEQfutExhmZJUX1Q0F0Zcw==/base.apk&quot;,\r\n    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,\r\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\r\n    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,\r\n    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,\r\n    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,\r\n    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,\r\n    &quot;io.flutter.reload.alreadyRun&quot;: &quot;true&quot;,\r\n    &quot;last_opened_file_path&quot;: &quot;C:/Users/SKLUM/Documents/repos/flutter_zebra_sdk_clone&quot;,\r\n    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,\r\n    &quot;project.structure.last.edited&quot;: &quot;Project&quot;,\r\n    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,\r\n    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,\r\n    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,\r\n    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settings.ide.settings.new.ui&quot;,\r\n    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;\r\n  }\r\n}</component>\r\n  <component name=\"RecentsManager\">\r\n    <key name=\"MoveFile.RECENT_KEYS\">\r\n      <recent name=\"C:\\Users\\SKLUM\\Documents\\repos\\flutter_zebra_sdk_clone\" />\r\n    </key>\r\n  </component>\r\n  <component name=\"RunManager\">\r\n    <configuration name=\"main.dart\" type=\"FlutterRunConfigurationType\" factoryName=\"Flutter\">\r\n      <option name=\"filePath\" value=\"$PROJECT_DIR$/example/lib/main.dart\" />\r\n      <method v=\"2\" />\r\n    </configuration>\r\n  </component>\r\n  <component name=\"SpellCheckerSettings\" RuntimeDictionaries=\"0\" Folders=\"0\" CustomDictionaries=\"0\" DefaultDictionary=\"application-level\" UseSingleDictionary=\"true\" transferred=\"true\" />\r\n  <component name=\"SvnConfiguration\">\r\n    <configuration />\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\r\n      <changelist id=\"fa6519bf-01df-413c-8c28-d7d041c67682\" name=\"Default Changelist\" comment=\"\" />\r\n      <created>1608089307608</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1608089307608</updated>\r\n      <workItem from=\"1688023162599\" duration=\"209000\" />\r\n      <workItem from=\"1688025656225\" duration=\"751000\" />\r\n    </task>\r\n    <servers />\r\n  </component>\r\n  <component name=\"TypeScriptGeneratedFilesManager\">\r\n    <option name=\"version\" value=\"3\" />\r\n  </component>\r\n  <component name=\"Vcs.Log.Tabs.Properties\">\r\n    <option name=\"TAB_STATES\">\r\n      <map>\r\n        <entry key=\"MAIN\">\r\n          <value>\r\n            <State />\r\n          </value>\r\n        </entry>\r\n      </map>\r\n    </option>\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision e11939816eb57cdada9a997ceedea245f672faa5)
++++ b/.idea/workspace.xml	(date 1694175583849)
+@@ -5,6 +5,7 @@
+   </component>
+   <component name="ChangeListManager">
+     <list default="true" id="fa6519bf-01df-413c-8c28-d7d041c67682" name="Default Changelist" comment="">
++      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt" beforeDir="false" afterPath="$PROJECT_DIR$/android/src/main/kotlin/com/tlt/flutter_zebra_sdk/FlutterZebraSdkPlugin.kt" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/example/android/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/example/android/.idea/gradle.xml" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/example/android/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/example/android/.idea/misc.xml" afterDir="false" />
+@@ -20,6 +21,7 @@
+   </component>
+   <component name="Git.Settings">
+     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
++    <option name="ROOT_SYNC" value="DONT_SYNC" />
+   </component>
+   <component name="MarkdownSettingsMigration">
+     <option name="stateVersion" value="1" />
+@@ -33,26 +35,26 @@
+     <option name="showExcludedFiles" value="false" />
+     <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="PropertiesComponent">{
+-  &quot;keyToString&quot;: {
+-    &quot;AnalyzeApkAction.lastApkPath&quot;: &quot;C:/Users/SKLUM/Documents/perole.apk/com.zebra.printersetup-GEQfutExhmZJUX1Q0F0Zcw==/base.apk&quot;,
+-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+-    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+-    &quot;io.flutter.reload.alreadyRun&quot;: &quot;true&quot;,
+-    &quot;last_opened_file_path&quot;: &quot;C:/Users/SKLUM/Documents/repos/flutter_zebra_sdk_clone&quot;,
+-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+-    &quot;project.structure.last.edited&quot;: &quot;Project&quot;,
+-    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+-    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+-    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
+-    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settings.ide.settings.new.ui&quot;,
+-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;
++  <component name="PropertiesComponent"><![CDATA[{
++  "keyToString": {
++    "AnalyzeApkAction.lastApkPath": "C:/Users/SKLUM/Documents/perole.apk/com.zebra.printersetup-GEQfutExhmZJUX1Q0F0Zcw==/base.apk",
++    "RunOnceActivity.OpenProjectViewOnStart": "true",
++    "RunOnceActivity.ShowReadmeOnStart": "true",
++    "RunOnceActivity.cidr.known.project.marker": "true",
++    "WebServerToolWindowFactoryState": "false",
++    "cidr.known.project.marker": "true",
++    "dart.analysis.tool.window.visible": "false",
++    "io.flutter.reload.alreadyRun": "true",
++    "last_opened_file_path": "C:/Users/SKLUM/Documents/repos/flutter_zebra_sdk_clone",
++    "nodejs_package_manager_path": "npm",
++    "project.structure.last.edited": "Project",
++    "project.structure.proportion": "0.15",
++    "project.structure.side.proportion": "0.2",
++    "run.code.analysis.last.selected.profile": "pProject Default",
++    "settings.editor.selected.configurable": "reference.settings.ide.settings.new.ui",
++    "show.migrate.to.gradle.popup": "false"
+   }
+-}</component>
++}]]></component>
+   <component name="RecentsManager">
+     <key name="MoveFile.RECENT_KEYS">
+       <recent name="C:\Users\SKLUM\Documents\repos\flutter_zebra_sdk_clone" />

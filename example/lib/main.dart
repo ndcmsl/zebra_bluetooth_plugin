@@ -141,7 +141,7 @@ class _MyAppState extends State<MyApp> {
       arr = '50J171201608';
     }
     try {
-      final rep = await ZebraSdk.printOverBluetooth(utf8.encode(data));
+      final rep = await ZebraSdk.printOverBluetooth(utf8.encode(data), 1);
       print('el booleano es: $rep');
     } catch (e) {
       print('llego al ultimo catch del codigo');
