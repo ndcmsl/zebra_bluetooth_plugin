@@ -5,39 +5,29 @@ import 'package:flutter/services.dart';
 class ZebraSdk {
   static const MethodChannel _channel = const MethodChannel('flutter_zebra_sdk');
 
-  static Future<String?> printZPLOverTCPIP(String ipAddress, {int? port, String? data}) async {
-    final Map<String, dynamic> params = {"ip": ipAddress};
-    if (port != null) {
-      params['port'] = port;
-    }
-    if (data != null) {
-      params['data'] = data;
-    }
-    return await _channel.invokeMethod('printZPLOverTCPIP', params);
+  static Future<String?> destroyBluetoothConnection() async {
+    return await _channel.invokeMethod('destroyBluetoothConnection');
   }
 
-  static Future<bool?> printZPLOverBluetooth(String macAddress, {List<int>? data, int? copies}) async {
+  static Future<bool?> establishBluetoothConnection(String macAddress) async {
     try {
       final Map<String, dynamic> params = {"mac": macAddress};
-      if (data != null) {
-        params['data'] = data;
-      }
-      if (copies != null) {
-        params['copies'] = copies;
-      }
-      await _channel.invokeMethod('printZPLOverBluetooth', params);
+      await _channel.invokeMethod('establishBluetoothConnection', params);
       return true;
     } on PlatformException catch (e) {
       return false;
     }
   }
 
-  static Future<String?> printZPLOverBluetoothInsecure(String macAddress, {String? data}) async {
-    final Map<String, dynamic> params = {"mac": macAddress};
+  static Future<String?> printOverBluetooth(List<int>? data, int? copies) async {
+    final Map<String, dynamic> params = {"data": data};
     if (data != null) {
       params['data'] = data;
     }
-    return await _channel.invokeMethod('printZPLOverBluetoothInsecure', params);
+    if (copies != null) {
+        params['copies'] = copies;
+    }
+    return await _channel.invokeMethod('printOverBluetooth', params);
   }
 
   static Future<dynamic> onDiscovery() async {
