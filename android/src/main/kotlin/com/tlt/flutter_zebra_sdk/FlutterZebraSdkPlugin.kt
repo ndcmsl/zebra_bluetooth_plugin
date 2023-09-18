@@ -251,7 +251,7 @@ private fun establishBluetoothConnection(@NonNull call: MethodCall, @NonNull res
           if (conn != null) {
             for (number in 1..num) {
               conn!!.write(data)
-              Thread.sleep(1000)
+              Thread.sleep(2000)
             }
           }
           Handler(Looper.getMainLooper()).post {
