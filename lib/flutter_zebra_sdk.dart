@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class ZebraSdk {
-  static const MethodChannel _channel = const MethodChannel('flutter_zebra_sdk');
+  static const MethodChannel _channel =
+      const MethodChannel('flutter_zebra_sdk');
 
   static Future<String?> destroyBluetoothConnection() async {
     return await _channel.invokeMethod('destroyBluetoothConnection');
@@ -14,18 +15,19 @@ class ZebraSdk {
       final Map<String, dynamic> params = {"mac": macAddress};
       await _channel.invokeMethod('establishBluetoothConnection', params);
       return true;
-    } on PlatformException catch (e) {
+    } on PlatformException {
       return false;
     }
   }
 
-  static Future<String?> printOverBluetooth(List<int>? data, int? copies) async {
+  static Future<String?> printOverBluetooth(
+      List<int>? data, int? copies) async {
     final Map<String, dynamic> params = {"data": data};
     if (data != null) {
       params['data'] = data;
     }
     if (copies != null) {
-        params['copies'] = copies;
+      params['copies'] = copies;
     }
     return await _channel.invokeMethod('printOverBluetooth', params);
   }
