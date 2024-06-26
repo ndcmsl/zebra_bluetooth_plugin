@@ -22,9 +22,9 @@ class ZebraSdk {
 
   static Future<String?> printOverBluetooth(
       List<int>? data, int? copies) async {
-    final Map<String, dynamic> params = {"data": data};
+    final Map<String, dynamic> params = {};
     if (data != null) {
-      params['data'] = data;
+      params['data'] = Uint8List.fromList(data);
     }
     if (copies != null) {
       params['copies'] = copies;
